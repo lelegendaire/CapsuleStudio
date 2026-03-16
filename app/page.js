@@ -1,7 +1,8 @@
 "use client"
 import Image from "next/image";
-import { useSession } from "next-auth/react"
-import { useState } from "react";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
+import { useEffect, useState } from "react";
+
 import { DatePickerDemo } from "./DatePicker";
 import {
   Card,
@@ -30,6 +31,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
+import {Checkbox} from "@/components/ui/checkbox"
 import {FieldDescription} from "@/components/ui/field"
 import { Cloud } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -43,9 +45,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LoginForm } from "@/components/login-form";
 import { SignupForm } from "@/components/signup-form";
-import { Avatar } from "@/components/ui/avatar";
+import { Skeleton } from "@/components/ui/skeleton";
+
 export default function Home() {
-  const { data: session } = useSession()
+  const [session, setSession] = useState(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [mode, setMode] = useState("login")
   const [name, setName] = useState("");
@@ -73,6 +76,13 @@ const handleCreate = () => {
     setDrawerOpen(true);
   }
 };
+useEffect(() => {
+  const token = localStorage.getItem("token")
+  const user = localStorage.getItem("user")
+  if (token && user) {
+    setSession({ user: JSON.parse(user) })
+  }
+}, [])
   return (
    <main className="w-full h-screen flex items-center justify-center">
     <Card className={"w-40/100 h-80/100 rounded-2xl"}>
@@ -87,13 +97,11 @@ const handleCreate = () => {
     // Si connecté, afficher avatar
     <div className="flex items-center gap-2">
      <Avatar>
-        <AvatarImage
-          src="/porsche.jpg"
-          alt="@evilrabbit"
-        />
-        <AvatarFallback>ER</AvatarFallback>
-        <AvatarBadge className="bg-green-600 dark:bg-green-800" />
-      </Avatar>
+  <AvatarImage src="/porsche.jpg" alt={session.user.name} />
+  <AvatarFallback>
+    {session.user.name?.charAt(0).toUpperCase() || "U"}
+  </AvatarFallback>
+</Avatar>
       <span>{session.user.name || "User"}</span>
     </div>
   ) : (
@@ -204,16 +212,21 @@ const handleCreate = () => {
               </div>
              <div className="grid gap-2">
               <div className="flex items-center">
+                <Label htmlFor="description">Email</Label>
+                
+              </div>
+               <Field orientation="horizontal">
+                <Checkbox id="capsuleopen" />
+      <Label htmlFor="capsuleopen">I want to receive an email when my capsule is opened</Label>
+               </Field>
+             </div>
+             <div className="grid gap-2">
+              <div className="flex items-center">
                 <Label htmlFor="description">Preview</Label>
                 
               </div>
-               <AspectRatio ratio={16 / 9} className="rounded-lg bg-muted">
-        <Image
-          src={"/porsche.jpg"}
-          alt="Photo"
-          fill
-          className="w-full rounded-lg object-cover grayscale dark:brightness-20"
-        />
+               <AspectRatio ratio={16 / 9} className="rounded-lg bg-muted mb-5">
+        <Skeleton className={"w-full rounded-lg"}/>
       </AspectRatio>
              </div>
           </div>
@@ -238,7 +251,10 @@ const handleCreate = () => {
       Sign in to create your capsule
     </DrawerDescription>
   </DrawerHeader>
-           {mode === "login" ? <LoginForm /> : <SignupForm />}
+           {mode === "login" 
+  ? <LoginForm onSuccess={() => { setDrawerOpen(false); setSession({ user: JSON.parse(localStorage.getItem("user")) }) }} /> 
+  : <SignupForm />
+}
            <DrawerFooter>
           <FieldDescription className="text-center">
                                     Don&apos;t have an account? <Button

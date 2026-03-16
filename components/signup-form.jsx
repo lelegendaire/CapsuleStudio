@@ -95,7 +95,7 @@ export function SignupForm({ ...props }) {
                         </Field>
                         <FieldGroup>
                             <Field>
-                                <Button type="submit">Create Account</Button>
+                                <Button type="submit" onClick={handleSubmit}>Create Account</Button>
                                 <Button variant="outline" type="button" onClick={() => signIn("google")}>
                                     Sign up with Google
                                 </Button>

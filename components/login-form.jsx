@@ -33,10 +33,12 @@ export function LoginForm({ className, ...props }) {
             headers: { "Content-Type": "application/json" },
         })
         const data = await res.json()
-        setLoading(true);
+        setLoading(false);
         if (res.ok) {
             localStorage.setItem("token", data.token)
+            localStorage.setItem("user", JSON.stringify(data.user))
             toast("Logged in!")
+            if (onSuccess) onSuccess() // ✅ fermer le drawer après connexion
         } else {
             toast(data.error)
         }
