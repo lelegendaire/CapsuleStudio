@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
-export function LoginForm({ className, ...props }) {
+export function LoginForm({ className, onSuccess, ...props }) {
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")

@@ -37,6 +37,8 @@ import { Cloud } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Field } from "@/components/ui/field";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -58,15 +60,47 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [capsuleLink, setCapsuleLink] = useState("");
   const [creating, setCreating] = useState(false);
-  // Ajouter le state
   const [files, setFiles] = useState([]);
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [myCapsules, setMyCapsules] = useState([]);
+  const [loadingCapsules, setLoadingCapsules] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
 
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    setFiles(Array.from(e.dataTransfer.files));
+    const selectedFiles = Array.from(e.dataTransfer.files);
+    setFiles(selectedFiles);
+    generatePreview(selectedFiles);
+  };
+
+  const handleFileSelect = (e) => {
+    const selectedFiles = Array.from(e.target.files);
+    setFiles(selectedFiles);
+    generatePreview(selectedFiles);
+  };
+
+  const generatePreview = (filesList) => {
+    if (filesList.length === 0) {
+      setPreviewData(null);
+      return;
+    }
+
+    const firstImage = filesList.find((f) => f.type?.startsWith("image/"));
+    const firstVideo = filesList.find((f) => f.type?.startsWith("video/"));
+
+    if (firstImage) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPreviewData({ type: "image", data: reader.result });
+      };
+      reader.readAsDataURL(firstImage);
+    } else if (firstVideo) {
+      setPreviewData({ type: "video", name: firstVideo.name });
+    } else {
+      setPreviewData({ type: "list", files: filesList });
+    }
   };
   // Lire le token/user depuis localStorage
   useEffect(() => {
@@ -76,6 +110,36 @@ export default function Home() {
       setSession({ user: JSON.parse(user) });
     }
   }, []);
+
+  // Fetch user's capsules when session changes
+  useEffect(() => {
+    if (session) {
+      const token = localStorage.getItem("token");
+      setLoadingCapsules(true);
+      fetch("/api/capsule", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => {
+          if (r.status === 401) {
+            // Token expiré → déconnecter silencieusement
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+            setSession(null);
+            toast("Session expirée, reconnecte-toi.");
+            return null;
+          }
+          return r.json();
+        })
+        .then((data) => {
+          if (!data) return;
+          if (data.capsules) {
+            setMyCapsules(data.capsules);
+          }
+          setLoadingCapsules(false);
+        })
+        .catch(() => setLoadingCapsules(false));
+    }
+  }, [session]);
 
   const createCapsule = async () => {
     const token = localStorage.getItem("token");
@@ -121,7 +185,6 @@ export default function Home() {
     });
     const data = await res.json();
     setCreating(false);
-
     if (res.ok) {
       const link = `${window.location.origin}/capsule/${data.capsule.id}`;
       setCapsuleLink(link);
@@ -137,6 +200,99 @@ export default function Home() {
     } else {
       setDrawerOpen(true);
     }
+  };
+
+  // Generate preview for files
+  const renderPreview = () => {
+    if (files.length === 0) {
+      return (
+        <AspectRatio
+          ratio={16 / 9}
+          className="rounded-lg bg-muted flex items-center justify-center"
+        >
+          <div className="text-center text-muted-foreground">
+            <Cloud className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p className="text-xs">No files selected</p>
+          </div>
+        </AspectRatio>
+      );
+    }
+
+    if (previewData?.type === "image") {
+      return (
+        <AspectRatio ratio={16 / 9} className="rounded-lg overflow-hidden">
+          <img
+            src={previewData.data}
+            alt="Preview"
+            className="w-full h-full object-cover"
+          />
+        </AspectRatio>
+      );
+    }
+
+    if (previewData?.type === "video") {
+      return (
+        <AspectRatio
+          ratio={16 / 9}
+          className="rounded-lg bg-muted flex items-center justify-center"
+        >
+          <div className="text-center">
+            <span className="text-4xl">🎬</span>
+            <p className="text-xs text-muted-foreground mt-2">
+              {previewData.name}
+            </p>
+          </div>
+        </AspectRatio>
+      );
+    }
+
+    if (previewData?.type === "list") {
+      return (
+        <AspectRatio ratio={16 / 9} className="rounded-lg bg-muted p-4">
+          <div className="h-full flex flex-col">
+            <p className="text-xs text-muted-foreground mb-2">
+              {files.length} file{files.length > 1 ? "s" : ""}
+            </p>
+            <div className="flex-1 overflow-auto space-y-1">
+              {files.slice(0, 4).map((file, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span>
+                    {file.type?.includes("pdf")
+                      ? "📕"
+                      : file.type?.includes("audio")
+                        ? "🎵"
+                        : file.type?.includes("zip") ||
+                            file.type?.includes("rar")
+                          ? "🗜️"
+                          : file.type?.includes("text")
+                            ? "📝"
+                            : "📄"}
+                  </span>
+                  <span className="truncate flex-1">{file.name}</span>
+                </div>
+              ))}
+              {files.length > 4 && (
+                <p className="text-xs text-muted-foreground">
+                  +{files.length - 4} more
+                </p>
+              )}
+            </div>
+          </div>
+        </AspectRatio>
+      );
+    }
+
+    return (
+      <AspectRatio
+        ratio={16 / 9}
+        className="rounded-lg bg-muted flex items-center justify-center"
+      >
+        <div className="text-center text-muted-foreground">
+          <Cloud className="w-8 h-8 mx-auto mb-2 opacity-50" />
+          <p className="text-xs">Loading preview...</p>
+        </div>
+      </AspectRatio>
+    );
   };
 
   const isPrivate = visibility === "private";
@@ -181,7 +337,7 @@ export default function Home() {
                     type="file"
                     multiple
                     className="hidden"
-                    onChange={(e) => setFiles(Array.from(e.target.files))}
+                    onChange={handleFileSelect}
                   />
 
                   {/* Zone cliquable */}
@@ -252,7 +408,7 @@ export default function Home() {
                   >
                     <div className="flex items-center gap-3">
                       <RadioGroupItem value="private" id="r1" />
-                      <Label htmlFor="r1">Private</Label>
+                      <Label htmlFor="r1">Password-protected</Label>
                     </div>
                     <div className="flex items-center gap-3">
                       <RadioGroupItem value="public" id="r2" />
@@ -272,7 +428,7 @@ export default function Home() {
                     <DatePickerDemo value={date} onChange={setDate} />
                   </div>
                   {/* Password seulement si NON public */}
-                  {!isPublic && (
+                  {!isPublic && isPrivate && (
                     <div className="gap-2">
                       <Label htmlFor="password">Password</Label>
                       <Input
@@ -289,18 +445,13 @@ export default function Home() {
                   <Label>Share</Label>
                   <Field orientation="horizontal">
                     <Input
-                      type="text"
                       readOnly
-                      disabled={isPrivate}
                       value={
-                        isPrivate
-                          ? "Not available for private capsules"
-                          : capsuleLink || "Create your capsule to get the link"
+                        capsuleLink || "Create your capsule to get the link"
                       }
                     />
                     <Button
-                      type="button"
-                      disabled={isPrivate || !capsuleLink}
+                      disabled={!capsuleLink}
                       onClick={() => {
                         navigator.clipboard.writeText(capsuleLink);
                         toast("Link copied!");
@@ -311,7 +462,8 @@ export default function Home() {
                   </Field>
                   {isPrivate && (
                     <p className="text-xs text-muted-foreground">
-                      Sharing is not available for private capsules.
+                      🔒 This capsule is password-protected. Share the link —
+                      recipients will need the password to open it.
                     </p>
                   )}
                 </div>
@@ -320,16 +472,65 @@ export default function Home() {
                   <div className="flex items-center">
                     <Label htmlFor="description">Preview</Label>
                   </div>
-                  <AspectRatio
-                    ratio={16 / 9}
-                    className="rounded-lg bg-muted mb-5"
-                  >
-                    <Skeleton className={"w-full rounded-lg"} />
-                  </AspectRatio>
+                  {renderPreview()}
                 </div>
               </div>
             </form>
           </CardContent>
+
+          {/* User's Capsules Section */}
+          {session && myCapsules.length > 0 && (
+            <CardContent>
+              <Separator className="my-4" />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Your Capsules</h3>
+                  <Badge variant="outline">{myCapsules.length}</Badge>
+                </div>
+                <div className="space-y-2">
+                  {myCapsules.map((capsule) => (
+                    <div
+                      key={capsule.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => {
+                        window.location.href = `/capsule/${capsule.id}`;
+                      }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {capsule.name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="secondary" className="text-xs">
+                            {capsule.visibility}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(capsule.createdAt).toLocaleDateString(
+                              "fr-FR",
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm">
+                        View
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          )}
+
+          {session && !loadingCapsules && myCapsules.length === 0 && (
+            <CardContent>
+              <Separator className="my-4" />
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">
+                  You haven&apos;t created any capsules yet.
+                </p>
+              </div>
+            </CardContent>
+          )}
           <CardFooter className="flex-col gap-2">
             <Button type="button" onClick={handleCreate} disabled={creating}>
               {creating ? "Creating..." : "Create"}

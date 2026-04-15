@@ -11,6 +11,10 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Lock } from "lucide-react";
+import { toast } from "sonner";
 
 export default function CapsulePage() {
   const { id } = useParams();
@@ -20,8 +24,20 @@ export default function CapsulePage() {
   const [countdown, setCountdown] = useState(null);
   const [canOpen, setCanOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [password, setPassword] = useState("");
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [files, setFiles] = useState([]);
 
   useEffect(() => {
+    // Check if we already unlocked this capsule in session storage
+    const unlockedCapsules = JSON.parse(
+      sessionStorage.getItem("unlockedCapsules") || "{}",
+    );
+    if (unlockedCapsules[id]) {
+      setFiles(unlockedCapsules[id].files);
+      setIsOpen(true);
+    }
+
     fetch(`/api/capsule/${id}`)
       .then((r) => r.json())
       .then((data) => {
@@ -81,6 +97,45 @@ export default function CapsulePage() {
     a.click();
   };
 
+  const handleUnlock = async (e) => {
+    e.preventDefault();
+    setIsUnlocking(true);
+    try {
+      const res = await fetch(`/api/capsule/${id}/unlock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (res.ok && data.unlocked) {
+        // Fetch the full capsule data with files now
+        const capsuleRes = await fetch(`/api/capsule/${id}?unlocked=true`);
+        const capsuleData = await capsuleRes.json();
+        if (capsuleData.capsule && capsuleData.capsule.files) {
+          const filesData = capsuleData.capsule.files;
+          setFiles(filesData);
+          // Store in session storage
+          const unlockedCapsules = JSON.parse(
+            sessionStorage.getItem("unlockedCapsules") || "{}",
+          );
+          unlockedCapsules[id] = { files: filesData };
+          sessionStorage.setItem(
+            "unlockedCapsules",
+            JSON.stringify(unlockedCapsules),
+          );
+        }
+        setIsOpen(true);
+        toast("Capsule unlocked!");
+        setPassword("");
+      } else {
+        toast(data.error || "Invalid password");
+      }
+    } catch (err) {
+      toast("Error unlocking capsule");
+    }
+    setIsUnlocking(false);
+  };
+
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -102,9 +157,9 @@ export default function CapsulePage() {
       </div>
     );
 
-  const files = Array.isArray(capsule.files) ? capsule.files : [];
-  const images = files.filter(isImage);
-  const others = files.filter((f) => !isImage(f));
+  const capsuleFiles = Array.isArray(files) ? files : [];
+  const images = capsuleFiles.filter(isImage);
+  const others = capsuleFiles.filter((f) => !isImage(f));
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-[url(/background_cap.webp)] bg-cover bg-center">
@@ -166,7 +221,8 @@ export default function CapsulePage() {
                     Fichiers
                   </p>
                   <p className="font-medium">
-                    {files.length} fichier{files.length > 1 ? "s" : ""}
+                    {capsuleFiles.length} fichier
+                    {capsuleFiles.length > 1 ? "s" : ""}
                   </p>
                 </div>
                 <div>
@@ -179,7 +235,26 @@ export default function CapsulePage() {
 
               <Separator />
 
-              {countdown ? (
+              {capsule.visibility === "private" && !isOpen ? (
+                <form onSubmit={handleUnlock} className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Lock className="w-4 h-4" />
+                    <span>This capsule is password protected</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder="Enter password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isUnlocking}
+                    />
+                    <Button type="submit" disabled={isUnlocking || !password}>
+                      {isUnlocking ? "Unlocking..." : "Unlock"}
+                    </Button>
+                  </div>
+                </form>
+              ) : countdown ? (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground text-center uppercase tracking-widest">
                     S&apos;ouvre dans
@@ -222,14 +297,15 @@ export default function CapsulePage() {
 
               <Separator />
 
-              {files.length === 0 ? (
+              {capsuleFiles.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-6">
                   Aucun fichier dans cette capsule.
                 </p>
               ) : (
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground uppercase tracking-widest">
-                    {files.length} fichier{files.length > 1 ? "s" : ""}
+                    {capsuleFiles.length} fichier
+                    {capsuleFiles.length > 1 ? "s" : ""}
                   </p>
 
                   {/* Grille images */}
